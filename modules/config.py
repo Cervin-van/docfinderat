@@ -29,9 +29,10 @@ PAGE_DELAY = 0.5
 REQUEST_TIMEOUT = 20
 
 # ─── Поштові індекси ──────────────────────────────────────────────────────────
-# Австрія: всі 4-значні коди від 1000 до 9999.
-# Порожні (~7000) пропускаються після першого запиту без результатів.
-POSTAL_CODES = [str(i) for i in range(1000, 10000)]
+POSTAL_CODES = [str(i) for i in range(1000, 10000, 10)]
+
+# ─── Пагінація ────────────────────────────────────────────────────────────────
+MAX_PAGES = 10
 
 # ─── Спеціальності ────────────────────────────────────────────────────────────
 # Формат: (slug у URL, відображувана назва)
@@ -106,4 +107,4 @@ SPECIALTIES = [
 _ROOT = os.path.join(os.path.dirname(__file__), "..")
 
 CHECKPOINT_FILE = os.path.join(_ROOT, "collect_checkpoint.json")
-JSON_OUTPUT = os.path.join(_ROOT, "json", "doctors.json")
+JSON_DIR = os.path.join(_ROOT, "json")
