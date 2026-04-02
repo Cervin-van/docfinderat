@@ -55,7 +55,8 @@ async def collect_specialty(
 ) -> list[dict]:
     """
     Паралельно збирає лікарів по всіх поштових індексах для однієї спеціальності.
-    Повертає дедублікований список.
+    Дедублікує тільки в межах цієї категорії (один і той же лікар може бути
+    в кількох категоріях і буде збережений окремо для кожної).
     """
     sem = asyncio.Semaphore(POSTAL_CONCURRENCY)
     tasks = [
@@ -65,17 +66,21 @@ async def collect_specialty(
 
     seen: set[str] = set()
     all_doctors: list[dict] = []
+    raw_count = 0
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for result in results:
         if isinstance(result, Exception):
             continue
         for doc in result:
+            raw_count += 1
             url = doc.get("profile_url")
             if url and url not in seen:
                 seen.add(url)
                 all_doctors.append(doc)
 
+    print(f"  Всього з поштових індексів (з дублями): {raw_count}")
+    print(f"  Унікальних в межах категорії:           {len(all_doctors)}")
     return all_doctors
 
 
@@ -284,7 +289,7 @@ async def main() -> None:
             # ── Етап 1: збір списків ──────────────────────────────────────
             print(f"[1/3] Збираємо список по {len(POSTAL_CODES)} індексах...")
             doctors = await collect_specialty(session, slug, display)
-            print(f"[1/3] Зібрано: {len(doctors)} унікальних лікарів\n")
+            print(f"[1/3] Буде оброблено: {len(doctors)} лікарів\n")
 
             if not doctors:
                 print("[SKIP] Лікарів не знайдено — пропускаємо.\n")
@@ -292,27 +297,37 @@ async def main() -> None:
                 checkpoint_save(done_slugs, total_saved)
                 continue
 
-            # ── Етап 2: збагачення профілів ───────────────────────────────
-            print(f"[2/3] Збагачуємо профілі ({PROFILE_CONCURRENCY} паралельно)...")
-            enriched = await enrich(session, doctors)
+            # ── Перевірка скільки вже є в БД ─────────────────────────────
+            urls = [d["profile_url"] for d in doctors if d.get("profile_url")]
+            existing_count = await sync_to_async(
+                lambda: Doctor.objects.filter(profile_url__in=urls).count()
+            )()
+            new_count = len(doctors) - existing_count
+            print(f"  В БД вже існує : {existing_count} (будуть оновлені)")
+            print(f"  Нових для БД   : {new_count} (будуть створені)")
+            print(f"  Всього в БД    : {total_saved}\n")
 
-            seen: set[str] = set()
-            unique: list[dict] = []
-            for d in enriched:
-                url = d.get("profile_url")
-                if url and url not in seen:
-                    seen.add(url)
-                    unique.append(d)
-            print(f"[2/3] Унікальних після збагачення: {len(unique)}\n")
+            # ── Етап 2+3: збагачення і збереження пачками ────────────────
+            BATCH = 100
+            print(f"[2/3] Збагачуємо профілі пачками по {BATCH} ({PROFILE_CONCURRENCY} паралельно)...")
 
-            # ── Етап 3: збереження ────────────────────────────────────────
-            print("[3/3] Зберігаємо в БД та JSON...")
-            batch_saved = await sync_to_async(save_to_db)(unique)
-            await sync_to_async(save_to_json)(unique, slug)
-            await sync_to_async(update_stats)(slug, display, len(unique))
+            all_unique: list[dict] = []
+            batch_saved = 0
 
-            total_saved += batch_saved
-            print(f"[3/3] Збережено: {batch_saved}  |  Всього в БД: {total_saved}\n")
+            for i in range(0, len(doctors), BATCH):
+                chunk = doctors[i : i + BATCH]
+                enriched_chunk = await enrich(session, chunk)
+
+                if enriched_chunk:
+                    saved = await sync_to_async(save_to_db)(enriched_chunk)
+                    batch_saved += saved
+                    total_saved += saved
+                    all_unique.extend(enriched_chunk)
+                    print(f"  [пачка {i//BATCH + 1}] отримано {len(enriched_chunk)}, збережено {saved} | Всього в БД: {total_saved}")
+
+            await sync_to_async(save_to_json)(all_unique, slug)
+            await sync_to_async(update_stats)(slug, display, len(all_unique))
+            print(f"[3/3] Категорія завершена: отримано {len(all_unique)}, збережено/оновлено {batch_saved} | Всього в БД: {total_saved}\n")
 
             # ── Checkpoint ────────────────────────────────────────────────
             done_slugs.add(slug)
