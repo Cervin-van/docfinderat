@@ -1,17 +1,14 @@
 """
-3_collect_all_doctors.py — збір усіх лікарів з docfinder.at за поштовими індексами.
+3_collect_all_doctors.py — збір всіх лікарів з docfinder.at
 
-Точка входу: запустіть напряму — python modules/3_collect_all_doctors.py
+Стратегія: спеціальність → всі поштові індекси → всі сторінки → збагачення → БД + JSON
 
-Алгоритм:
-  Для кожної спеціальності зі списку SPECIALTIES:
-    1. Паралельний збір по всіх поштових індексах Австрії (1000–9999)
-    2. Паралельне збагачення профілів лікарів
-    3. Збереження в PostgreSQL + JSON
-    4. Запис checkpoint-у для відновлення після зупинки
+Запуск:
+  python modules/3_collect_all_doctors.py              # всі спеціальності
+  python modules/3_collect_all_doctors.py --slug zahnarzt  # одна спеціальність
 
-Відновлення після зупинки — просто запустіть знову, завершені спеціальності пропускаються.
-Почати з нуля — видаліть collect_checkpoint.json у корені проєкту.
+Відновлення після зупинки: просто запустіть знову — завершені спеціальності пропускаються.
+Почати з нуля: видаліть collect_checkpoint.json
 """
 
 import sys
@@ -22,11 +19,10 @@ import importlib
 import aiohttp
 from decimal import Decimal, InvalidOperation
 
-# Bootstrap: налаштовуємо sys.path і Django ORM
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
 
-import load_django  # noqa: F401 — ініціалізує Django ORM
+import load_django  # noqa: F401
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -36,7 +32,7 @@ from parser_app.models import Doctor, DoctorGallery
 from config import (
     SPECIALTIES, POSTAL_CODES, HEADERS,
     POSTAL_CONCURRENCY, PROFILE_CONCURRENCY,
-    CHECKPOINT_FILE, JSON_DIR,
+    PAGE_DELAY, CHECKPOINT_FILE, JSON_DIR,
 )
 
 _parse = importlib.import_module("1_parse_page")
@@ -48,46 +44,63 @@ collect_postal_code = _paginate.collect_postal_code
 
 # ─── Збір по спеціальності ────────────────────────────────────────────────────
 
-async def collect_specialty(
-    session: aiohttp.ClientSession,
-    slug: str,
-    display: str,
-) -> list[dict]:
+async def collect_specialty(session: aiohttp.ClientSession, slug: str, display: str) -> list[dict]:
     """
-    Паралельно збирає лікарів по всіх поштових індексах для однієї спеціальності.
-    Дедублікує тільки в межах цієї категорії (один і той же лікар може бути
-    в кількох категоріях і буде збережений окремо для кожної).
+    Паралельно збирає лікарів по всіх поштових індексах.
+    Використовує as_completed — обробляє результати одразу і показує прогрес.
     """
     sem = asyncio.Semaphore(POSTAL_CONCURRENCY)
     tasks = [
-        collect_postal_code(session, sem, slug, display, code)
+        asyncio.ensure_future(collect_postal_code(session, sem, slug, display, code))
         for code in POSTAL_CODES
     ]
 
     seen: set[str] = set()
-    all_doctors: list[dict] = []
-    raw_count = 0
+    doctors: list[dict] = []
+    raw_total = 0
+    codes_done = 0
+    codes_with_results = 0
+    errors = 0
+    total = len(tasks)
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    for result in results:
-        if isinstance(result, Exception):
+    for coro in asyncio.as_completed(tasks):
+        try:
+            result = await coro
+        except BaseException as e:
+            print(f"  [!] Помилка збору індексу: {e}")
+            errors += 1
+            codes_done += 1
             continue
-        for doc in result:
-            raw_count += 1
-            url = doc.get("profile_url")
-            if url and url not in seen:
-                seen.add(url)
-                all_doctors.append(doc)
 
-    print(f"  Всього з поштових індексів (з дублями): {raw_count}")
-    print(f"  Унікальних в межах категорії:           {len(all_doctors)}")
-    return all_doctors
+        codes_done += 1
+        if result:
+            codes_with_results += 1
+            for doc in result:
+                raw_total += 1
+                url = doc.get("profile_url")
+                if not url:
+                    continue
+                url_key = url.rstrip("/").lower()
+                if url_key not in seen:
+                    seen.add(url_key)
+                    doc["profile_url"] = url.rstrip("/")
+                    doctors.append(doc)
+
+        if codes_done % 500 == 0:
+            print(f"  --- {codes_done}/{total} оброблено | унікальних: {len(doctors)} ---")
+
+    print(f"  Поштових з результатами : {codes_with_results} із {total}")
+    if errors:
+        print(f"  Помилок при зборі       : {errors}")
+    print(f"  Знайдено (з дублями)    : {raw_total}")
+    print(f"  Унікальних лікарів      : {len(doctors)}")
+    return doctors
 
 
 # ─── Збагачення профілів ──────────────────────────────────────────────────────
 
 async def enrich(session: aiohttp.ClientSession, doctors: list[dict]) -> list[dict]:
-    """Паралельно завантажує профільні сторінки та збагачує дані лікарів."""
+    """Паралельно завантажує профільні сторінки для списку лікарів."""
     sem = asyncio.Semaphore(PROFILE_CONCURRENCY)
     tasks = [fetch_profile(session, sem, doc) for doc in doctors]
 
@@ -95,20 +108,22 @@ async def enrich(session: aiohttp.ClientSession, doctors: list[dict]) -> list[di
     for coro in asyncio.as_completed(tasks):
         doc = await coro
         enriched.append(doc)
-        if len(enriched) % 100 == 0 or len(enriched) == len(doctors):
-            print(f"  [{len(enriched)}/{len(doctors)}] профілів оброблено...")
+        if len(enriched) % 50 == 0 or len(enriched) == len(doctors):
+            print(f"    збагачено {len(enriched)}/{len(doctors)}...")
 
     return enriched
 
 
 # ─── Збереження в PostgreSQL ──────────────────────────────────────────────────
 
-def save_to_db(doctors: list[dict]) -> int:
+def save_to_db(doctors: list[dict]) -> tuple[int, int]:
     """
-    Зберігає лікарів у PostgreSQL через update_or_create.
-    Не видаляє існуючі записи. Повертає кількість збережених записів.
+    Зберігає лікарів через update_or_create.
+    Повертає (кількість нових, кількість оновлених).
     """
-    saved = 0
+    created_count = 0
+    updated_count = 0
+
     for raw in doctors:
         d = raw.copy()
         gallery_urls = d.pop("gallery", None)
@@ -118,43 +133,44 @@ def save_to_db(doctors: list[dict]) -> int:
         except (ValueError, TypeError):
             reviews = None
 
+        lat_raw = d.pop("latitude", None)
+        lon_raw = d.pop("longitude", None)
         try:
-            latitude = Decimal(str(d.pop("latitude", None) or "")) or None
+            latitude = Decimal(str(lat_raw)) if lat_raw else None
         except InvalidOperation:
             latitude = None
-            d.pop("latitude", None)
-
         try:
-            longitude = Decimal(str(d.pop("longitude", None) or "")) or None
+            longitude = Decimal(str(lon_raw)) if lon_raw else None
         except InvalidOperation:
             longitude = None
-            d.pop("longitude", None)
 
         profile_url = d.pop("profile_url", None)
         if not profile_url:
             continue
 
-        doctor_obj, created = Doctor.objects.update_or_create(
+        search_slug = d.pop("search_slug", "")
+
+        obj, created = Doctor.objects.update_or_create(
             profile_url=profile_url,
+            search_slug=search_slug,
             defaults={**d, "reviews": reviews, "latitude": latitude, "longitude": longitude},
         )
 
-        if created and gallery_urls:
+        if created:
+            created_count += 1
+        else:
+            updated_count += 1
+
+        if gallery_urls:
             for url in gallery_urls:
-                DoctorGallery.objects.get_or_create(doctor=doctor_obj, photo_url=url)
+                DoctorGallery.objects.get_or_create(doctor=obj, photo_url=url)
 
-        saved += 1
-
-    return saved
+    return created_count, updated_count
 
 
 # ─── Збереження в JSON ────────────────────────────────────────────────────────
 
 def save_to_json(doctors: list[dict], slug: str) -> None:
-    """
-    Зберігає лікарів спеціальності у json/{slug}.json.
-    Якщо файл вже існує — додає нових (дедублікація по profile_url).
-    """
     os.makedirs(JSON_DIR, exist_ok=True)
     filepath = os.path.join(JSON_DIR, f"{slug}.json")
 
@@ -178,12 +194,6 @@ def save_to_json(doctors: list[dict], slug: str) -> None:
 
 
 def update_stats(slug: str, display: str, count: int) -> None:
-    """
-    Оновлює json/_stats.json — загальна статистика збору:
-      - total: скільки всього лікарів спаршено
-      - fields: список полів, які збираються
-      - specialties: словник {slug: {display, count}} по кожній спеціальності
-    """
     os.makedirs(JSON_DIR, exist_ok=True)
     stats_file = os.path.join(JSON_DIR, "_stats.json")
 
@@ -195,24 +205,10 @@ def update_stats(slug: str, display: str, count: int) -> None:
         except (json.JSONDecodeError, OSError):
             stats = {}
 
-    # Поля, які збираються парсером (фіксований перелік)
-    stats["fields"] = [
-        "name", "profile_url", "rating", "reviews", "specialty",
-        "address", "services", "photo_url", "gallery", "appointment_url",
-        "phone", "fax", "email", "website", "description",
-        "address_full", "zip_code", "city", "opening_hours",
-        "latitude", "longitude", "photo_url_full",
-    ]
-
     specialties = stats.get("specialties", {})
-    prev_count = specialties.get(slug, {}).get("count", 0)
     specialties[slug] = {"display": display, "count": count}
     stats["specialties"] = specialties
     stats["total"] = sum(s["count"] for s in specialties.values())
-
-    # Оновлюємо дельту у total якщо запис вже існував
-    if prev_count != count:
-        stats["total"] = stats["total"] - prev_count + count
 
     with open(stats_file, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
@@ -221,122 +217,108 @@ def update_stats(slug: str, display: str, count: int) -> None:
 # ─── Checkpoint ───────────────────────────────────────────────────────────────
 
 def checkpoint_load() -> tuple[set[str], int]:
-    """
-    Повертає (множина завершених slug-ів, загальна кількість збережених лікарів).
-    Якщо файлу немає — повертає порожній стан.
-    """
     if not os.path.exists(CHECKPOINT_FILE):
         return set(), 0
-
     with open(CHECKPOINT_FILE, encoding="utf-8") as f:
         data = json.load(f)
-
-    done  = set(data.get("done", []))
+    done = set(data.get("done", []))
     total = data.get("total_saved", 0)
-    print(f"[CHECKPOINT] Відновлення: {len(done)} спеціальностей завершено, {total} лікарів збережено раніше.")
+    print(f"[CHECKPOINT] Відновлення: {len(done)} спеціальностей завершено, {total} записів в БД раніше.")
     return done, total
 
 
 def checkpoint_save(done_slugs: set[str], total_saved: int) -> None:
-    """Записує поточний прогрес у файл."""
     with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
-        json.dump(
-            {"done": list(done_slugs), "total_saved": total_saved},
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
+        json.dump({"done": list(done_slugs), "total_saved": total_saved}, f, ensure_ascii=False, indent=2)
 
 
-# ─── Головна функція ──────────────────────────────────────────────────────────
+# ─── Точка входу ─────────────────────────────────────────────────────────────
 
 async def main() -> None:
-    # Якщо передано аргумент --slug hausarzt — обробити лише одну спеціальність
-    only_slug = None
     if "--slug" in sys.argv:
         only_slug = sys.argv[sys.argv.index("--slug") + 1]
         match = next(((s, d) for s, d in SPECIALTIES if s == only_slug), None)
         if not match:
-            print(f"[ERROR] Slug '{only_slug}' не знайдено в SPECIALTIES.")
+            print(f"[ERROR] Slug '{only_slug}' не знайдено.")
             print(f"Доступні: {', '.join(s for s, _ in SPECIALTIES)}")
             return
         pending = [match]
-        done_slugs, total_saved = set(), 0
+        done_slugs, total_db = set(), 0
     else:
-        done_slugs, total_saved = checkpoint_load()
-        pending = [(slug, display) for slug, display in SPECIALTIES if slug not in done_slugs]
+        done_slugs, total_db = checkpoint_load()
+        pending = [(s, d) for s, d in SPECIALTIES if s not in done_slugs]
 
     if not pending:
-        print("[DONE] Усі спеціальності вже оброблені.")
-        print("[DONE] Щоб почати знову — видаліть collect_checkpoint.json")
+        print("[DONE] Всі спеціальності оброблені. Щоб почати знову — видаліть collect_checkpoint.json")
         return
 
+    # Реальна кількість записів в БД на старті
+    total_db = await sync_to_async(Doctor.objects.count)()
+
     print(f"\n{'='*60}")
-    print(f"[START] Спеціальностей до обробки : {len(pending)} / {len(SPECIALTIES)}")
-    print(f"[START] Поштових індексів          : {len(POSTAL_CODES)}")
-    print(f"[START] Паралельність індексів     : {POSTAL_CONCURRENCY}")
-    print(f"[START] Паралельність профілів     : {PROFILE_CONCURRENCY}")
-    print(f"[START] Вже збережено лікарів      : {total_saved}")
+    print(f"  Спеціальностей до обробки : {len(pending)} / {len(SPECIALTIES)}")
+    print(f"  Поштових індексів         : {len(POSTAL_CODES)}")
+    print(f"  Паралельність індексів    : {POSTAL_CONCURRENCY}")
+    print(f"  Паралельність профілів    : {PROFILE_CONCURRENCY}")
+    print(f"  Записів в БД зараз        : {total_db}")
     print(f"{'='*60}\n")
+
+    BATCH = 100  # скільки профілів збагачувати і зберігати за раз
 
     connector = aiohttp.TCPConnector(limit=max(POSTAL_CONCURRENCY, PROFILE_CONCURRENCY))
     async with aiohttp.ClientSession(headers=HEADERS, connector=connector) as session:
+
         for idx, (slug, display) in enumerate(pending, 1):
             print(f"\n{'─'*60}")
             print(f"[{idx}/{len(pending)}] {display}  (slug: {slug})")
             print(f"{'─'*60}")
 
-            # ── Етап 1: збір списків ──────────────────────────────────────
-            print(f"[1/3] Збираємо список по {len(POSTAL_CODES)} індексах...")
+            # ── Збір ─────────────────────────────────────────────────────
+            print(f"[Збір] по {len(POSTAL_CODES)} індексах...")
             doctors = await collect_specialty(session, slug, display)
-            print(f"[1/3] Буде оброблено: {len(doctors)} лікарів\n")
+            for doc in doctors:
+                doc["search_slug"] = slug
 
             if not doctors:
-                print("[SKIP] Лікарів не знайдено — пропускаємо.\n")
+                print("[ПРОПУСК] Лікарів не знайдено.\n")
                 done_slugs.add(slug)
-                checkpoint_save(done_slugs, total_saved)
+                checkpoint_save(done_slugs, total_db)
                 continue
 
-            # ── Перевірка скільки вже є в БД ─────────────────────────────
-            urls = [d["profile_url"] for d in doctors if d.get("profile_url")]
-            existing_count = await sync_to_async(
-                lambda: Doctor.objects.filter(profile_url__in=urls).count()
-            )()
-            new_count = len(doctors) - existing_count
-            print(f"  В БД вже існує : {existing_count} (будуть оновлені)")
-            print(f"  Нових для БД   : {new_count} (будуть створені)")
-            print(f"  Всього в БД    : {total_saved}\n")
-
-            # ── Етап 2+3: збагачення і збереження пачками ────────────────
-            BATCH = 100
-            print(f"[2/3] Збагачуємо профілі пачками по {BATCH} ({PROFILE_CONCURRENCY} паралельно)...")
-
-            all_unique: list[dict] = []
-            batch_saved = 0
+            # ── Збагачення + збереження пачками ──────────────────────────
+            print(f"\n[Збагачення + збереження] пачками по {BATCH}...")
+            all_enriched: list[dict] = []
+            spec_created = 0
+            spec_updated = 0
 
             for i in range(0, len(doctors), BATCH):
                 chunk = doctors[i : i + BATCH]
-                enriched_chunk = await enrich(session, chunk)
+                batch_num = i // BATCH + 1
+                total_batches = (len(doctors) + BATCH - 1) // BATCH
+                print(f"  Пачка {batch_num}/{total_batches} ({len(chunk)} лікарів):")
 
-                if enriched_chunk:
-                    saved = await sync_to_async(save_to_db)(enriched_chunk)
-                    batch_saved += saved
-                    total_saved += saved
-                    all_unique.extend(enriched_chunk)
-                    print(f"  [пачка {i//BATCH + 1}] отримано {len(enriched_chunk)}, збережено {saved} | Всього в БД: {total_saved}")
+                enriched = await enrich(session, chunk)
+                created, updated = await sync_to_async(save_to_db)(enriched)
 
-            await sync_to_async(save_to_json)(all_unique, slug)
-            await sync_to_async(update_stats)(slug, display, len(all_unique))
-            print(f"[3/3] Категорія завершена: отримано {len(all_unique)}, збережено/оновлено {batch_saved} | Всього в БД: {total_saved}\n")
+                spec_created += created
+                spec_updated += updated
+                total_db += created
+                all_enriched.extend(enriched)
 
-            # ── Checkpoint ────────────────────────────────────────────────
+                print(f"    → нових: {created}, оновлених: {updated} | Всього в БД: {total_db}")
+
+            # ── JSON + stats ──────────────────────────────────────────────
+            await sync_to_async(save_to_json)(all_enriched, slug)
+            await sync_to_async(update_stats)(slug, display, len(all_enriched))
+
+            print(f"\n[✓] {display}: зібрано {len(doctors)}, нових {spec_created}, оновлених {spec_updated}")
+            print(f"    Всього в БД: {total_db}")
+
             done_slugs.add(slug)
-            checkpoint_save(done_slugs, total_saved)
-            print(f"[✓] {display} завершено. Прогрес: {len(done_slugs)}/{len(SPECIALTIES)} спеціальностей.")
+            checkpoint_save(done_slugs, total_db)
 
     print(f"\n{'='*60}")
-    print("[DONE] Збір завершено!")
-    print(f"[DONE] Всього збережено: {total_saved} лікарів")
+    print(f"[DONE] Збір завершено! Записів в БД: {total_db}")
     print(f"[DONE] Оброблено спеціальностей: {len(done_slugs)}/{len(SPECIALTIES)}")
     print(f"{'='*60}")
 

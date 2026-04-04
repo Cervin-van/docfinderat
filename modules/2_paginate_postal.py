@@ -42,43 +42,45 @@ async def collect_postal_code(
     doctors: list[dict] = []
     seen: set[str] = set()
     page = 1
+    pages_fetched = 0
 
-    async with sem:
-        while page <= MAX_PAGES:
-            url = _search_url(slug, display, code, page)
-            try:
+    while page <= MAX_PAGES:
+        url = _search_url(slug, display, code, page)
+        try:
+            async with sem:
                 async with session.get(
                     url,
                     timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
                 ) as resp:
                     resp.raise_for_status()
                     html = await resp.text()
-            except Exception as e:
-                print(f"  [!] {code} стор.{page}: {e}")
-                break
+            pages_fetched += 1
+        except Exception as e:
+            print(f"  [!] {code} стор.{page}: {e}")
+            break
 
-            soup = BeautifulSoup(html, "lxml")
-            cards = soup.find_all("div", class_="card search-result")
+        soup = BeautifulSoup(html, "lxml")
+        cards = soup.find_all("div", class_="card search-result")
 
-            if not cards:
-                break  # порожній індекс або кінець пагінації
+        if not cards:
+            break  # порожній індекс або кінець пагінації
 
-            added = 0
-            for card in cards:
-                doc = extract_doctor(card)
-                url_val = doc.get("profile_url")
-                if url_val and url_val not in seen:
-                    seen.add(url_val)
-                    doctors.append(doc)
-                    added += 1
+        added = 0
+        for card in cards:
+            doc = extract_doctor(card)
+            url_val = doc.get("profile_url")
+            if url_val and url_val not in seen:
+                seen.add(url_val)
+                doctors.append(doc)
+                added += 1
 
-            if added == 0:
-                break  # всі картки вже бачили — кінець
+        if added == 0:
+            break  # всі картки вже бачили — кінець
 
-            page += 1
+        page += 1
+        if page <= MAX_PAGES:
             await asyncio.sleep(PAGE_DELAY)
 
-    if doctors:
-        print(f"  [+] {code}: {len(doctors)} лікарів")
+    print(f"  [{code}] {len(doctors)} лікарів | {pages_fetched} стор.")
 
     return doctors

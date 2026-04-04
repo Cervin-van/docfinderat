@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DocFinderAT is an async web scraper that collects all doctors from docfinder.at across all specialties and stores them in PostgreSQL + JSON. Coverage: all Austrian postal codes (1000–9999) × 32 specialties.
+DocFinderAT is an async web scraper that collects all doctors from docfinder.at across all specialties and stores them in PostgreSQL + JSON. Coverage: all Austrian postal codes (1000–9999) × 62 specialties.
 
 ## Setup
 
@@ -22,13 +22,16 @@ cd docfinderat_project && python manage.py migrate && cd ..
 
 ```bash
 # Full collection — all specialties, all postal codes
-python modules/run.py
+python modules/3_collect_all_doctors.py
+
+# Single specialty
+python modules/3_collect_all_doctors.py --slug zahnarzt
 
 # Resume after interruption — just run again, completed specialties are skipped
-python modules/run.py
+python modules/3_collect_all_doctors.py
 
 # Start over — delete checkpoint first
-del collect_checkpoint.json && python modules/run.py
+del collect_checkpoint.json && python modules/3_collect_all_doctors.py
 ```
 
 ## Django Admin
@@ -45,36 +48,54 @@ cd docfinderat_project && python manage.py runserver
 ```
 docfinder.at
     ↓
-collector.py: для кожного поштового індексу (1000–9999)
+3_collect_all_doctors.py: collect_specialty()
+    → iterates all postal codes (1000–9999) with POSTAL_CONCURRENCY=50
+    → calls collect_postal_code() per code
+    ↓
+2_paginate_postal.py: collect_postal_code()
     → URL: /suche/{slug}/{postal_code}?page={n}
-    → 10 індексів паралельно, пагінація до кінця
-    → порожні індекси (~7000) пропускаються після 1 запиту
+    → paginates up to MAX_PAGES=50, stops on empty page or all-duplicate cards
+    → calls extract_doctor() per card
     ↓
-parser.py: fetch_profile() — збагачення профілів
-    → 20 профілів паралельно
-    → JSON-LD structured data: phone, email, hours, coordinates
+1_parse_page.py: extract_doctor() + fetch_profile()
+    → extract_doctor(): name, profile_url, rating, reviews, specialty, address,
+      services, photo_url, gallery, appointment_url from search card HTML
+    → fetch_profile(): phone, fax, email, website, description, address_full,
+      zip_code, city, opening_hours, lat/lon from profile page JSON-LD
     ↓
-saver.py: зберігає в PostgreSQL (update_or_create) + JSON
+3_collect_all_doctors.py: enrich() + save_to_db() + save_to_json()
+    → PROFILE_CONCURRENCY=30 parallel profile fetches
+    → batches of 100 doctors enriched + saved at a time
+    → PostgreSQL via Django ORM (update_or_create on profile_url)
+    → JSON: json/{slug}.json per specialty, json/_stats.json totals
     ↓
-checkpoint.py: прогрес по спеціальностях
+checkpoint: collect_checkpoint.json — tracks completed specialties
 ```
 
-### modules/ Structure
+### modules/ File Structure
 
 ```
 modules/
-  config.py      — SPECIALTIES, POSTAL_CODES, константи
-  parser.py      — extract_doctor() + fetch_profile()
-  collector.py   — collect_specialty() через всі поштові індекси
-  saver.py       — save_to_db() + save_to_json()
-  checkpoint.py  — load/save прогресу
-  run.py         — точка входу
-  archive/       — старі скрипти (не використовуються)
+  1_parse_page.py          — extract_doctor() + fetch_profile()
+  2_paginate_postal.py     — collect_postal_code() with pagination logic
+  3_collect_all_doctors.py — entry point: collect_specialty(), enrich(),
+                             save_to_db(), save_to_json(), checkpoint I/O
+  config.py                — SPECIALTIES, POSTAL_CODES, all constants
+  load_django.py           — bootstraps Django ORM for standalone scripts
+  test_scraper.py          — tests
+```
+
+### JSON Output Structure
+
+```
+json/
+  data/         — per-specialty JSON files: {slug}.json + _stats.json
+  checkpoint/   — collect_checkpoint.json (tracks completed specialties)
 ```
 
 ### Django ORM in Standalone Scripts
 
-`load_django.py` bootstraps Django ORM — imported first in `run.py`. Django project lives at `docfinderat_project/docfinderat_project/` (double-nested). Only `saver.py` imports Django models.
+`modules/load_django.py` bootstraps Django ORM — imported first in `3_collect_all_doctors.py`. Django project lives at `docfinderat_project/docfinderat_project/` (double-nested). Only `3_collect_all_doctors.py` imports Django models.
 
 ### Key Models (`docfinderat_project/parser_app/models.py`)
 
@@ -83,10 +104,11 @@ modules/
 
 ## Configuration (`modules/config.py`)
 
-- `POSTAL_CODES` — `range(1000, 10000)` — auto-generated
-- `SPECIALTIES` — list of `(slug, display)` tuples
-- `POSTAL_CONCURRENCY = 10`, `PROFILE_CONCURRENCY = 20`, `PAGE_DELAY = 0.5`
-- Checkpoint: `collect_checkpoint.json` (project root)
-- JSON output: `json/doctors.json`
+- `POSTAL_CODES` — `range(1000, 10000)` as strings
+- `SPECIALTIES` — 62 `(slug, display)` tuples
+- `POSTAL_CONCURRENCY = 50`, `PROFILE_CONCURRENCY = 30`, `PAGE_DELAY = 0.2`, `MAX_PAGES = 50`
+- `REQUEST_TIMEOUT = 20`
+- Checkpoint: `json/checkpoint/collect_checkpoint.json`
+- JSON output: `json/data/{slug}.json` per specialty, `json/data/_stats.json` for aggregate totals
 
 All DB credentials in `.env` (not committed), read via `python-decouple`.

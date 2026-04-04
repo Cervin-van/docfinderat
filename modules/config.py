@@ -16,23 +16,23 @@ HEADERS = {
 
 # ─── Швидкість збору ──────────────────────────────────────────────────────────
 
-# Скільки поштових індексів обробляти паралельно
-POSTAL_CONCURRENCY = 10
+# Максимум паралельних HTTP-запитів при зборі по поштових індексах
+POSTAL_CONCURRENCY = 50
 
 # Скільки профілів лікарів завантажувати паралельно
-PROFILE_CONCURRENCY = 20
+PROFILE_CONCURRENCY = 30
 
 # Затримка між сторінками одного поштового індексу (секунди)
-PAGE_DELAY = 0.5
+PAGE_DELAY = 0.2
 
 # Таймаут на один HTTP-запит (секунди)
 REQUEST_TIMEOUT = 20
 
 # ─── Поштові індекси ──────────────────────────────────────────────────────────
-POSTAL_CODES = [str(i) for i in range(1000, 10000, 10)]
+POSTAL_CODES = [str(i) for i in range(1000, 10000)]
 
 # ─── Пагінація ────────────────────────────────────────────────────────────────
-MAX_PAGES = 10
+MAX_PAGES = 50
 
 # ─── Спеціальності ────────────────────────────────────────────────────────────
 # Формат: (slug у URL, відображувана назва)
@@ -106,5 +106,5 @@ SPECIALTIES = [
 
 _ROOT = os.path.join(os.path.dirname(__file__), "..")
 
-CHECKPOINT_FILE = os.path.join(_ROOT, "collect_checkpoint.json")
-JSON_DIR = os.path.join(_ROOT, "json")
+CHECKPOINT_FILE = os.path.join(_ROOT, "json", "checkpoint", "collect_checkpoint.json")
+JSON_DIR = os.path.join(_ROOT, "json", "data")
