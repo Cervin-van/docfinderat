@@ -1,19 +1,27 @@
 {
   "done": [
-    "arbeitsmediziner",
-    "frauenarzt",
     "gerichtsmediziner",
-    "fachärztin-fuer-allgemeinchirurgie",
-    "embryologe",
+    "jugendchirurgie",
     "hausarzt",
+    "internist-fuer-angiologie",
+    "geriater",
+    "internist",
+    "herzchirurg",
+    "endokrinologe",
+    "immunbiologe",
+    "infektiologe",
+    "frauenarzt",
+    "fachärztin-fuer-allgemeinchirurgie",
+    "hepatologe",
+    "embryologe",
     "elektrotherapie",
     "anaesthesist",
+    "arbeitsmediziner",
     "gefaesschirurg",
     "chirurgische-elektrophysiologie",
     "hals-nasen-ohren-arzt",
-    "endokrinologe",
     "hautarzt",
-    "geriater"
+    "intensivmediziner"
   ],
-  "total_saved": 16924
+  "total_saved": 18482
 }

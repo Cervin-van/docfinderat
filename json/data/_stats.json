@@ -43,7 +43,39 @@
     "hautarzt": {
       "display": "Hautarzt",
       "count": 716
+    },
+    "hepatologe": {
+      "display": "Hepatologe",
+      "count": 254
+    },
+    "herzchirurg": {
+      "display": "Herzchirurg",
+      "count": 48
+    },
+    "immunbiologe": {
+      "display": "Immunbiologe",
+      "count": 9
+    },
+    "infektiologe": {
+      "display": "Infektiologe",
+      "count": 18
+    },
+    "intensivmediziner": {
+      "display": "Intensivmediziner",
+      "count": 234
+    },
+    "internist": {
+      "display": "Internist",
+      "count": 1989
+    },
+    "internist-fuer-angiologie": {
+      "display": "Internist für Angiologie",
+      "count": 427
+    },
+    "jugendchirurgie": {
+      "display": "Jugendchirurgie",
+      "count": 36
     }
   },
-  "total": 11238
+  "total": 14253
 }
