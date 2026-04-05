@@ -1,0 +1,233 @@
+{
+  "specialties": {
+    "anaesthesist": {
+      "display": "Anästhesiologe",
+      "count": 198
+    },
+    "arbeitsmediziner": {
+      "display": "Arbeitsmediziner",
+      "count": 45
+    },
+    "embryologe": {
+      "display": "Embryologe",
+      "count": 1
+    },
+    "endokrinologe": {
+      "display": "Endokrinologe",
+      "count": 85
+    },
+    "fachärztin-fuer-allgemeinchirurgie": {
+      "display": "Fachärztin für Allgemeinchirurgie",
+      "count": 139
+    },
+    "frauenarzt": {
+      "display": "Frauenarzt",
+      "count": 632
+    },
+    "gefaesschirurg": {
+      "display": "Gefäßchirurg",
+      "count": 133
+    },
+    "geriater": {
+      "display": "Geriater",
+      "count": 419
+    },
+    "gerichtsmediziner": {
+      "display": "Gerichtsmediziner",
+      "count": 4
+    },
+    "hausarzt": {
+      "display": "Hausarzt",
+      "count": 1586
+    },
+    "hautarzt": {
+      "display": "Hautarzt",
+      "count": 375
+    },
+    "hepatologe": {
+      "display": "Hepatologe",
+      "count": 193
+    },
+    "herzchirurg": {
+      "display": "Herzchirurg",
+      "count": 45
+    },
+    "immunbiologe": {
+      "display": "Immunbiologe",
+      "count": 9
+    },
+    "infektiologe": {
+      "display": "Infektiologe",
+      "count": 16
+    },
+    "intensivmediziner": {
+      "display": "Intensivmediziner",
+      "count": 181
+    },
+    "internist": {
+      "display": "Internist",
+      "count": 747
+    },
+    "internist-fuer-angiologie": {
+      "display": "Internist für Angiologie",
+      "count": 239
+    },
+    "jugendchirurgie": {
+      "display": "Jugendchirurgie",
+      "count": 27
+    },
+    "kardiologe": {
+      "display": "Kardiologe",
+      "count": 275
+    },
+    "kieferchirurg": {
+      "display": "Kieferchirurg",
+      "count": 135
+    },
+    "kinder-kardiologe": {
+      "display": "Kinder Kardiologe",
+      "count": 18
+    },
+    "kinder-und-jugendpsychiater": {
+      "display": "Kinder- und Jugendpsychiater",
+      "count": 134
+    },
+    "kinderarzt": {
+      "display": "Kinderarzt",
+      "count": 331
+    },
+    "labordiagnostiker": {
+      "display": "Labordiagnostiker",
+      "count": 76
+    },
+    "lungenarzt": {
+      "display": "Lungenarzt",
+      "count": 186
+    },
+    "medizinischer-genetiker": {
+      "display": "Medizinischer Genetiker",
+      "count": 223
+    },
+    "mikrobiologe": {
+      "display": "Mikrobiologe",
+      "count": 20
+    },
+    "neonatologe": {
+      "display": "Neonatologe",
+      "count": 34
+    },
+    "nephrologe": {
+      "display": "Nephrologe",
+      "count": 75
+    },
+    "neurochirurg": {
+      "display": "Neurochirurg",
+      "count": 121
+    },
+    "neurologe": {
+      "display": "Neurologe",
+      "count": 318
+    },
+    "neuropathologe": {
+      "display": "Neuropathologe",
+      "count": 68
+    },
+    "onkologe": {
+      "display": "Onkologe",
+      "count": 116
+    },
+    "orthopaede": {
+      "display": "Orthopäde",
+      "count": 579
+    },
+    "pathologe": {
+      "display": "Pathologe",
+      "count": 50
+    },
+    "pathophysiologe": {
+      "display": "Pathophysiologe",
+      "count": 5
+    },
+    "phoniater": {
+      "display": "Phoniater",
+      "count": 27
+    },
+    "physikalischer-mediziner": {
+      "display": "Physikalischer Mediziner",
+      "count": 122
+    },
+    "radiologe": {
+      "display": "Radiologe",
+      "count": 276
+    },
+    "rheumatologe": {
+      "display": "Rheumatologe",
+      "count": 118
+    },
+    "schmerzmediziner": {
+      "display": "Schmerzmediziner",
+      "count": 19
+    },
+    "schoenheitschirurg": {
+      "display": "Schönheitschirurg",
+      "count": 230
+    },
+    "sozialmediziner": {
+      "display": "Sozialmediziner",
+      "count": 1
+    },
+    "sportarzt": {
+      "display": "Sportarzt",
+      "count": 600
+    },
+    "strahlentherapeut": {
+      "display": "Strahlentherapeut",
+      "count": 24
+    },
+    "thoraxchirurg": {
+      "display": "Thoraxchirurg",
+      "count": 33
+    },
+    "toxikologe": {
+      "display": "Toxikologe",
+      "count": 3
+    },
+    "transfusionsmediziner": {
+      "display": "Transfusionsmediziner",
+      "count": 5
+    },
+    "traumatologe": {
+      "display": "Traumatologe",
+      "count": 501
+    },
+    "tropenmediziner": {
+      "display": "Tropenmediziner",
+      "count": 20
+    },
+    "unfallchirurg": {
+      "display": "Unfallchirurg",
+      "count": 386
+    },
+    "urologe": {
+      "display": "Urologe",
+      "count": 277
+    },
+    "virologe": {
+      "display": "Virologe",
+      "count": 1
+    },
+    "viszeralchirurg": {
+      "display": "Viszeralchirurg",
+      "count": 423
+    },
+    "zahnarzt": {
+      "display": "Zahnarzt",
+      "count": 1169
+    },
+    "zytodiagnostiker": {
+      "display": "Zytodiagnostiker",
+      "count": 30
+    }
+  },
+  "total": 12103
+}

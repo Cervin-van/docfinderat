@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Univ.Doz. Dr. Ernest Groman",
+    "profile_url": "https://www.docfinder.at/sozialmediziner/1050-wien/dr-ernest-groman",
+    "rating": null,
+    "reviews": null,
+    "specialty": "Sozialmediziner",
+    "address": "Rechte Wienzeile 81/1, 1050 Wien",
+    "services": "",
+    "photo_url": "https://assets.docfinder.at/frontend/images/static/avatars/doctor.svg",
+    "gallery": null,
+    "appointment_url": null,
+    "search_slug": "sozialmediziner",
+    "phone": "+43 1 585 85 44",
+    "fax": null,
+    "email": null,
+    "website": null,
+    "description": "Sozialmediziner",
+    "address_full": "Rechte Wienzeile 81/1",
+    "zip_code": "1050",
+    "city": "Wien",
+    "opening_hours": null,
+    "latitude": "48.193545",
+    "longitude": "16.355059",
+    "photo_url_full": "https://assets.docfinder.at/frontend/images/static/avatars/doctor.svg"
+  }
+]

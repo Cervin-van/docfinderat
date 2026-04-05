@@ -1,0 +1,33 @@
+[
+  {
+    "name": "Dr. Hans Joachim Wolf",
+    "profile_url": "https://www.docfinder.at/frauenarzt/6020-innsbruck/dr-hans-joachim-wolf",
+    "rating": "4,84",
+    "reviews": "15",
+    "specialty": "Frauenarzt, Histologe u. Embryologe",
+    "address": "Valiergasse 62/II, 6020 Innsbruck",
+    "services": "",
+    "photo_url": "https://assets.docfinder.at/frontend/images/static/avatars/doctor.svg",
+    "gallery": null,
+    "appointment_url": null,
+    "search_slug": "embryologe",
+    "phone": "+43 512 353534",
+    "fax": null,
+    "email": null,
+    "website": null,
+    "description": "Frauenarzt, Histologe u. Embryologe",
+    "address_full": "Valiergasse 62/II",
+    "zip_code": "6020",
+    "city": "Innsbruck",
+    "opening_hours": {
+      "Friday": "09:00–12:00",
+      "Monday": "09:00–13:00, 13:00–15:00, 15:00–20:00",
+      "Thursday": "09:00–13:00, 13:00–15:00, 15:00–20:00",
+      "Tuesday": "09:00–13:00, 13:00–15:00, 15:00–20:00",
+      "Wednesday": "09:00–13:00"
+    },
+    "latitude": "47.269212",
+    "longitude": "11.404102",
+    "photo_url_full": "https://assets.docfinder.at/frontend/images/static/avatars/doctor.svg"
+  }
+]

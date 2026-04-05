@@ -15,6 +15,35 @@ from bs4 import BeautifulSoup
 
 from config import REQUEST_TIMEOUT
 
+PROFILE_RETRY_COUNT = 3
+PROFILE_RETRY_DELAY = 2.0
+INTERNET_CHECK_INTERVAL = 10
+
+_CONN_ERRORS = (
+    aiohttp.ClientConnectorError,
+    aiohttp.ServerDisconnectedError,
+    asyncio.TimeoutError,
+)
+
+
+async def _wait_for_internet() -> None:
+    first = True
+    while True:
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection("8.8.8.8", 53),
+                timeout=3,
+            )
+            writer.close()
+            if not first:
+                print("  [✓] Інтернет відновлено, продовжуємо...")
+            return
+        except Exception:
+            if first:
+                print(f"  [⚠] Інтернет недоступний — чекаємо (перевірка кожні {INTERNET_CHECK_INTERVAL}с)...")
+                first = False
+            await asyncio.sleep(INTERNET_CHECK_INTERVAL)
+
 
 def extract_doctor(card) -> dict:
     """Витягує базові дані лікаря з картки пошукової видачі."""
@@ -110,18 +139,32 @@ async def fetch_profile(session: aiohttp.ClientSession, semaphore: asyncio.Semap
         doctor.update(empty)
         return doctor
 
-    async with semaphore:
+    html = None
+    http_errors = 0
+    while True:
         try:
-            async with session.get(
-                profile_url,
-                timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
-            ) as resp:
-                resp.raise_for_status()
-                html = await resp.text()
+            async with semaphore:
+                async with session.get(
+                    profile_url,
+                    timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT),
+                ) as resp:
+                    resp.raise_for_status()
+                    html = await resp.text()
+            break
+        except _CONN_ERRORS:
+            await _wait_for_internet()
         except Exception as e:
-            print(f"  [!] Профіль {doctor.get('name', '?')}: {e}")
-            doctor.update(empty)
-            return doctor
+            http_errors += 1
+            if http_errors < PROFILE_RETRY_COUNT:
+                await asyncio.sleep(PROFILE_RETRY_DELAY)
+            else:
+                print(f"  [!] Профіль {doctor.get('name', '?')}: {e}")
+                doctor.update(empty)
+                return doctor
+
+    if html is None:
+        doctor.update(empty)
+        return doctor
 
     soup = BeautifulSoup(html, "lxml")
     profile = dict(empty)

@@ -1,0 +1,49 @@
+{
+  "specialties": {
+    "anaesthesist": {
+      "display": "Anästhesiologe",
+      "count": 346
+    },
+    "arbeitsmediziner": {
+      "display": "Arbeitsmediziner",
+      "count": 62
+    },
+    "embryologe": {
+      "display": "Embryologe",
+      "count": 1
+    },
+    "endokrinologe": {
+      "display": "Endokrinologe",
+      "count": 110
+    },
+    "fachärztin-fuer-allgemeinchirurgie": {
+      "display": "Fachärztin für Allgemeinchirurgie",
+      "count": 183
+    },
+    "frauenarzt": {
+      "display": "Frauenarzt",
+      "count": 1413
+    },
+    "gefaesschirurg": {
+      "display": "Gefäßchirurg",
+      "count": 161
+    },
+    "geriater": {
+      "display": "Geriater",
+      "count": 1077
+    },
+    "gerichtsmediziner": {
+      "display": "Gerichtsmediziner",
+      "count": 5
+    },
+    "hausarzt": {
+      "display": "Hausarzt",
+      "count": 7164
+    },
+    "hautarzt": {
+      "display": "Hautarzt",
+      "count": 716
+    }
+  },
+  "total": 11238
+}
